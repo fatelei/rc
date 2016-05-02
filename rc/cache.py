@@ -13,6 +13,7 @@ from rc.promise import Promise
 #: Running mode for cache
 NORMAL_MODE = 0
 BATCH_MODE = 1
+JSON_NONE = 'null'
 
 
 class cached_property(object):
@@ -195,12 +196,13 @@ class BaseCache(object):
                     self._pending_operations.append(
                         (f, args, kwargs, promise, cache_key, expire))
                     return promise
-                rv = self._raw_get(cache_key)
+                rv = self.get(cache_key)
                 if rv is None:
                     value = f(*args, **kwargs)
                     self.set(cache_key, value, expire)
-                    rv = self.serializer.dumps(value)
-                return self.serializer.loads(rv)
+                    self.serializer.dumps(value)
+                    return value
+                return rv
 
             wrapper.__rc_cache_params__ = {
                 'key_prefix': key_prefix,
