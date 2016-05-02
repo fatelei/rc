@@ -234,3 +234,22 @@ def test_cache_cluster_batch_mode(redis_hosts):
 
     for i in range(20):
         assert cluster_batch_test_func(i) == i
+
+
+def test_cache_bypass_values(redis_unix_socket_path):
+    cache = Cache(redis_options={'unix_socket_path': redis_unix_socket_path},
+                  bypass_values=["test"])
+
+    @cache.cache()
+    def test():
+        return 'test'
+    test()
+
+    assert cache.invalidate(test) == 0
+
+    @cache.cache()
+    def test1():
+        return 'test1'
+    test1()
+
+    assert cache.invalidate(test1) == 1

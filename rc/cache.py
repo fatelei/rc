@@ -36,7 +36,7 @@ class BaseCache(object):
     """
 
     def __init__(self, namespace=None, serializer_cls=None,
-                 default_expire=3 * 24 * 3600):
+                 default_expire=3 * 24 * 3600, bypass_values=[]):
         if serializer_cls is None:
             serializer_cls = JSONSerializer
         self.namespace = namespace or ''
@@ -44,6 +44,7 @@ class BaseCache(object):
         self.default_expire = default_expire
         self._running_mode = NORMAL_MODE
         self._pending_operations = []
+        self._bypass_values = bypass_values
 
     def get_client(self):
         """Returns the redis client that is used for cache."""
@@ -196,13 +197,15 @@ class BaseCache(object):
                     self._pending_operations.append(
                         (f, args, kwargs, promise, cache_key, expire))
                     return promise
-                rv = self.get(cache_key)
+                rv = self._raw_get(cache_key)
                 if rv is None:
                     value = f(*args, **kwargs)
+                    if value in self._bypass_values:
+                        return value
+
                     self.set(cache_key, value, expire)
-                    self.serializer.dumps(value)
-                    return value
-                return rv
+                    rv = self.serializer.dumps(value)
+                return self.serializer.loads(rv)
 
             wrapper.__rc_cache_params__ = {
                 'key_prefix': key_prefix,
@@ -307,8 +310,9 @@ class Cache(BaseCache):
 
     def __init__(self, host='localhost', port=6379, db=0, password=None,
                  socket_timeout=None, namespace=None, serializer_cls=None,
-                 default_expire=3 * 24 * 3600, redis_options=None):
-        BaseCache.__init__(self, namespace, serializer_cls, default_expire)
+                 default_expire=3 * 24 * 3600, redis_options=None, bypass_values=[]):
+        BaseCache.__init__(
+            self, namespace, serializer_cls, default_expire, bypass_values)
         if redis_options is None:
             redis_options = {}
         self.host = host
@@ -382,8 +386,9 @@ class CacheCluster(BaseCache):
     def __init__(self, hosts, namespace=None, serializer_cls=None,
                  default_expire=3 * 24 * 3600, router_cls=None,
                  router_options=None, pool_cls=None, pool_options=None,
-                 max_concurrency=64, poller_timeout=1.0):
-        BaseCache.__init__(self, namespace, serializer_cls, default_expire)
+                 max_concurrency=64, poller_timeout=1.0, bypass_values=[]):
+        BaseCache.__init__(
+            self, namespace, serializer_cls, default_expire, bypass_values)
         self.hosts = hosts
         self.router_cls = router_cls
         self.router_options = router_options
